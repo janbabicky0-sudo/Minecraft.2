@@ -73,13 +73,14 @@ export function canHarvest(blockId, heldId) {
 }
 
 export class Interaction {
-  constructor({ scene, world, player, inventory, hud, onOpenTable }) {
+  constructor({ scene, world, player, inventory, hud, onOpenTable, itemDrops }) {
     this.scene = scene;
     this.world = world;
     this.player = player;
     this.inventory = inventory;
     this.hud = hud;
     this.onOpenTable = onOpenTable;
+    this.itemDrops = itemDrops;
 
     this.target = null;
     this.mining = false;
@@ -185,7 +186,8 @@ export class Interaction {
       } else {
         drops = [id];
       }
-      for (const d of drops) if (d) this.inventory.add(d, 1);
+      const cx = hit.block.x + 0.5, cy = hit.block.y + 0.5, cz = hit.block.z + 0.5;
+      for (const d of drops) if (d) this.itemDrops.spawn(d, cx, cy, cz);
     }
   }
 

@@ -23,13 +23,13 @@ export class World {
       cutout: new THREE.MeshLambertMaterial({
         map: atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide,
       }),
+      // glass/water render fully opaque (no alpha blending) so nothing in the
+      // world looks see-through except leaves/cactus's hard cutout gaps.
       transparent: new THREE.MeshLambertMaterial({
-        map: atlas.texture, vertexColors: true, transparent: true, opacity: 1,
-        alphaTest: 0.02, depthWrite: false, side: THREE.DoubleSide,
+        map: atlas.texture, vertexColors: true, side: THREE.DoubleSide,
       }),
       water: new THREE.MeshLambertMaterial({
-        map: atlas.texture, vertexColors: true, transparent: true, opacity: 0.86,
-        depthWrite: true, side: THREE.FrontSide,
+        map: atlas.texture, vertexColors: true, side: THREE.FrontSide,
       }),
     };
     this.renderOrder = { opaque: 0, cutout: 0, transparent: 2, water: 3 };

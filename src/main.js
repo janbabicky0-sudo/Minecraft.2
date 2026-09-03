@@ -6,6 +6,7 @@ import {
 import { initTerrain, biomeAt, BIOME_INFO, heightAt } from './world/terrain.js';
 import { loadAtlas } from './rendering/atlas.js';
 import { World } from './world/world.js';
+import { ItemDrops } from './world/drops.js';
 import { Sky } from './rendering/sky.js';
 import { HandView } from './rendering/hand.js';
 import { Player } from './player/player.js';
@@ -47,7 +48,7 @@ function fovForAspect(aspect) {
   return THREE.MathUtils.clamp((v * 180) / Math.PI, 45, 80);
 }
 
-let world, sky, player, controls, interaction, inventory, hud, pause, hand;
+let world, sky, player, controls, interaction, inventory, hud, pause, hand, itemDrops;
 let headlamp;
 let headlampOn = false;
 let atlas;
@@ -175,6 +176,7 @@ async function startGame(save, mode = 'survival') {
     savedEdits: save?.edits || {},
     onEdit: () => autosaver?.markDirty(),
   });
+  itemDrops = new ItemDrops(scene, atlas);
 
   player = new Player(camera, world);
   player.setMode(save?.mode || mode);
@@ -186,7 +188,7 @@ async function startGame(save, mode = 'survival') {
   headlampOn = false;
 
   interaction = new Interaction({
-    scene, world, player, inventory, hud,
+    scene, world, player, inventory, hud, itemDrops,
     onOpenTable: () => { if (state === 'playing') openInventory(true); },
   });
 
@@ -460,6 +462,7 @@ function step() {
       player.update(dt);
       world.update(player.pos, 6);
       interaction.update(dt);
+      itemDrops.update(dt, world, player, (id) => inventory.add(id, 1));
 
       const moving = Math.hypot(player.vel.x, player.vel.z) > 0.4;
       hand.update(dt, moving, Math.hypot(player.vel.x, player.vel.z));
