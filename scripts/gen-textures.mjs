@@ -79,37 +79,27 @@ class Tile {
 const clamp255 = (v) => Math.max(0, Math.min(255, Math.round(v)));
 const lerp = (a, b, t) => a + (b - a) * t;
 
+// ---- fixed bitmaps (extracted from a supplied 16x16 texture) ----------------
+// RGBA, 16x16, base64-encoded raw bytes (row-major, top->down).
+function tileFromB64(b64) {
+  const t = new Tile(0);
+  t.buf = new Uint8Array(Buffer.from(b64, 'base64'));
+  return t;
+}
+const GRASS_TOP_B64 =
+  'b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9fljP/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/ebhK/1+WM/9vqjz/b6o8/2+qPP9vqjz/ebhK/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP95uEr/b6o8/2+qPP9Pgir/b6o8/0+CKv9vqjz/b6o8/2+qPP9vqjz/b6o8/0+CKv9vqjz/X5Yz/2+qPP9vqjz/b6o8/0+CKv9vqjz/ebhK/2+qPP9vqjz/ebhK/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP9fljP/b6o8/2+qPP9Pgir/b6o8/2+qPP9Pgir/b6o8/0+CKv9vqjz/ebhK/2+qPP9fljP/X5Yz/3m4Sv9vqjz/b6o8/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/2+qPP9fljP/ebhK/2+qPP9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/3m4Sv9vqjz/b6o8/2+qPP9fljP/X5Yz/2+qPP9vqjz/b6o8/0+CKv9Pgir/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/0+CKv9vqjz/b6o8/2+qPP9vqjz/b6o8/1+WM/9vqjz/b6o8/0+CKv9fljP/ebhK/2+qPP95uEr/ebhK/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/1+WM/95uEr/X5Yz/1+WM/95uEr/b6o8/3m4Sv9fljP/X5Yz/2+qPP9vqjz/b6o8/1+WM/9vqjz/T4Iq/2+qPP9vqjz/b6o8/3m4Sv9Pgir/X5Yz/3m4Sv9vqjz/b6o8/3m4Sv9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/X5Yz/1+WM/9vqjz/ebhK/2+qPP9vqjz/b6o8/1+WM/9fljP/b6o8/1+WM/9vqjz/X5Yz/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9fljP/b6o8/2+qPP9fljP/b6o8/w==';
+const GRASS_SIDE_B64 =
+  'a0Ql/4paNP+KWjT/ilo0/3pNK/96TSv/ilo0/4paNP+KWjT/ek0r/4paNP+KWjT/ilo0/4paNP+aa0D/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/ek0r/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP+aa0D/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/mmtA/5prQP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ek0r/3pNK/+KWjT/mmtA/5prQP+KWjT/a0Ql/4paNP96TSv/ilo0/4paNP+KWjT/mmtA/3pNK/+KWjT/a0Ql/4paNP96TSv/ilo0/3pNK/9rRCX/mmtA/4paNP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP96TSv/ek0r/4paNP9rRCX/ilo0/4paNP+KWjT/mmtA/2tEJf+KWjT/ek0r/5prQP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/a0Ql/4paNP+KWjT/a0Ql/4paNP+KWjT/mmtA/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP9rRCX/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/a0Ql/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/3pNK/96TSv/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/3pNK/96TSv/ilo0/4paNP+KWjT/ilo0/3pNK/9vqjz/b6o8/3pNK/96TSv/ebhK/3pNK/9vqjz/ebhK/3pNK/9vqjz/ilo0/3pNK/95uEr/ilo0/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/ebhK/2+qPP9fljP/b6o8/2+qPP9vqjz/ebhK/2+qPP9vqjz/b6o8/0+CKv9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP95uEr/X5Yz/w==';
+const DIRT_B64 =
+  'ek0r/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/2tEJf+aa0D/ilo0/4paNP+KWjT/ek0r/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/5prQP+KWjT/ek0r/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+aa0D/ek0r/4paNP9rRCX/ilo0/5prQP+KWjT/mmtA/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP9rRCX/ilo0/3pNK/9rRCX/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/4paNP9rRCX/ilo0/4paNP9rRCX/ilo0/4paNP96TSv/ilo0/5prQP96TSv/ilo0/3pNK/+KWjT/ilo0/3pNK/96TSv/ek0r/4paNP+KWjT/ek0r/3pNK/9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/ek0r/3pNK/+KWjT/ek0r/3pNK/9rRCX/ilo0/2tEJf9rRCX/ilo0/2tEJf+KWjT/ilo0/3pNK/+KWjT/ek0r/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/a0Ql/4paNP+aa0D/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/2tEJf+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+aa0D/ilo0/3pNK/+KWjT/ilo0/2tEJf+KWjT/ilo0/3pNK/+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/a0Ql/4paNP+KWjT/mmtA/4paNP9rRCX/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP9rRCX/ek0r/3pNK/96TSv/ek0r/3pNK/96TSv/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+aa0D/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+aa0D/ilo0/w==';
+
 // ---- painters ---------------------------------------------------------------
 // Each returns a Tile. Order here === atlas index order.
 const PAINTERS = {
-  grass_top: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([104, 168, 68, 255], 16, { octaves: 3 });
-    for (let i = 0; i < 30; i++) {
-      const x = Math.floor(t.rnd(i, 5) * 16), y = Math.floor(t.rnd(i, 9) * 16);
-      t.set(x, y, 84, 140, 52);
-    }
-    return t;
-  },
-  grass_side: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([134, 96, 62, 255], 15, { specks: 0.05, speck: [110, 78, 50] });
-    // green top overhang with a jagged edge
-    for (let x = 0; x < 16; x++) {
-      const h = 3 + Math.round(t.rnd(x, 0) * 2);
-      for (let y = 0; y < h; y++) {
-        const j = (fbm(t.rnd, x / 3, y, 2) - 0.5) * 24;
-        t.set(x, y, clamp255(100 + j), clamp255(162 + j), clamp255(64 + j));
-      }
-      t.set(x, h, 70, 118, 44); // dark contact line
-    }
-    return t;
-  },
-  dirt: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([134, 96, 62, 255], 17, { specks: 0.06, speck: [104, 72, 46], octaves: 3 });
-    return t;
-  },
+  // grass_top / grass_side / dirt use a supplied 16x16 texture (grass_block.glb) verbatim.
+  grass_top: () => tileFromB64(GRASS_TOP_B64),
+  grass_side: () => tileFromB64(GRASS_SIDE_B64),
+  dirt: () => tileFromB64(DIRT_B64),
   stone: (s) => {
     const t = new Tile(s);
     t.fillNoise([128, 128, 130, 255], 16, { specks: 0.04, speck: [96, 96, 100], octaves: 3 });
