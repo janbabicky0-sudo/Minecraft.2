@@ -1,0 +1,21 @@
+{
+  "name": "voxelcraft",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Minecraft-style voxel game in the browser (Three.js + Vite). Original assets only.",
+  "scripts": {
+    "gen-textures": "node scripts/gen-textures.mjs",
+    "predev": "node scripts/gen-textures.mjs",
+    "prebuild": "node scripts/gen-textures.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
