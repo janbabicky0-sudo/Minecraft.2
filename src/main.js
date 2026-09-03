@@ -3,7 +3,7 @@ import {
   DEFAULT_RENDER_DISTANCE, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE,
   CHUNK_SX, CHUNK_SZ, DAY_LENGTH, isItem, B, I,
 } from './constants.js';
-import { initTerrain, biomeAt, BIOME_INFO } from './world/terrain.js';
+import { initTerrain, biomeAt, BIOME_INFO, heightAt } from './world/terrain.js';
 import { loadAtlas } from './rendering/atlas.js';
 import { World } from './world/world.js';
 import { Sky } from './rendering/sky.js';
@@ -470,6 +470,7 @@ function step() {
       world.update(player.pos, state === 'loading' ? 12 : 4);
     }
 
+    sky.setUnderground(player.pos.y < heightAt(Math.floor(player.pos.x), Math.floor(player.pos.z)) - 1);
     sky.update(active ? dt : dt * 0.15, camera);
     updateFog();
 

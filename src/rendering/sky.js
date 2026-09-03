@@ -11,6 +11,7 @@ const COL = {
 };
 
 const tmp = new THREE.Color();
+const CAVE_FOG = new THREE.Color(0x06070a);
 function mix3(a, b, c, t) {
   // t in 0..1 across a->b->c
   if (t < 0.5) return tmp.copy(a).lerp(b, t * 2).clone();
@@ -97,11 +98,19 @@ export class Sky {
     scene.fog = new THREE.Fog(COL.dayHorizon.getHex(), 40, 180);
 
     this._phaseLabel = 'den';
+    this._underground = 0;
+    this._targetUnderground = 0;
   }
 
   setFogDistance(near, far) {
     this._fogNear = near;
     this._fogFar = far;
+  }
+
+  // true while the player has solid terrain above them (cave, mine, ...) so
+  // fog fades to a dark colour instead of the bright sky horizon.
+  setUnderground(flag) {
+    this._targetUnderground = flag ? 1 : 0;
   }
 
   // 0 night .. 1 full day
@@ -129,13 +138,20 @@ export class Sky {
 
     this.dome.material.uniforms.topColor.value.copy(top);
     this.dome.material.uniforms.bottomColor.value.copy(horizon);
+    this.scene.background = horizon;
 
-    this.scene.fog.color.copy(horizon);
+    // underground: fog fades to a dark cave colour instead of the sky
+    // horizon, so distant unlit rock fades to black rather than into the
+    // bright blue sky (which reads as "broken / see-through" blocks).
+    this._underground += (this._targetUnderground - this._underground) * Math.min(1, dt * 3);
+    const fogColor = this._underground > 0.001
+      ? horizon.clone().lerp(CAVE_FOG, this._underground)
+      : horizon;
+    this.scene.fog.color.copy(fogColor);
     if (this._fogNear != null) {
       this.scene.fog.near = this._fogNear;
       this.scene.fog.far = this._fogFar;
     }
-    this.scene.background = horizon;
 
     // ---- lights ----
     const d = THREE.MathUtils.clamp(elev * 1.4 + 0.05, 0, 1);
