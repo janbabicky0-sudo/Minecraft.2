@@ -133,11 +133,13 @@ function structureBlockFromList(list, wx, wy, wz) {
 // ---- caves / ores -----------------------------------------------------
 function isCave(wx, wy, wz, surfaceH) {
   if (wy <= 4 || wy >= surfaceH - 1) return false;
-  if (N.noise3D(wx * 0.045, wy * 0.05, wz * 0.045) > 0.52) return true;
+  // Thresholds tuned so the underground stays mostly solid rock (~5-6% carved)
+  // instead of a hollow, swiss-cheese interior you can see clean through.
+  if (N.noise3D(wx * 0.045, wy * 0.05, wz * 0.045) > 0.85) return true;
   const b = 1 - Math.abs(N.noise3D(wx * 0.02 + 40, wy * 0.03, wz * 0.02));
-  if (b <= 0.86) return false;
+  if (b <= 0.88) return false;
   const c = 1 - Math.abs(N.noise3D(wx * 0.02, wy * 0.03, wz * 0.02 + 80));
-  return c > 0.86;
+  return c > 0.88;
 }
 
 function oreAt(wx, wy, wz, surfaceH) {
