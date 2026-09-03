@@ -25,7 +25,7 @@ export class ItemDrops {
   _makeMesh(id) {
     if (isItem(id)) {
       const tex = this._tileTexture(itemTile(id));
-      const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
+      const mat = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide });
       const g = new THREE.Group();
       const a = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE), mat);
       const b = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE), mat);

@@ -277,6 +277,17 @@ const PAINTERS = {
     return t;
   },
 
+  // mining-progress overlay: black, alpha is a noise field so the game can
+  // grow the crack with a rising alphaTest (hard cutout, no blending).
+  crack: (s) => {
+    const t = new Tile(s);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const n = fbm(t.rnd, x / 5, y / 5, 4);
+      t.set(x, y, 0, 0, 0, clamp255(n * 255));
+    }
+    return t;
+  },
+
   // ---- item icons (transparent background) ----
   stick: (s) => {
     const t = new Tile(s);

@@ -73,7 +73,7 @@ export function canHarvest(blockId, heldId) {
 }
 
 export class Interaction {
-  constructor({ scene, world, player, inventory, hud, onOpenTable, itemDrops }) {
+  constructor({ scene, world, player, inventory, hud, onOpenTable, itemDrops, atlas }) {
     this.scene = scene;
     this.world = world;
     this.player = player;
@@ -97,10 +97,19 @@ export class Interaction {
     this.outline.renderOrder = 5;
     scene.add(this.outline);
 
-    // crack overlay
+    // crack overlay: hard cutout (like leaves), never alpha-blended — the
+    // crack tile's alpha is a noise field, so a falling alphaTest reveals
+    // more of it as mining progresses instead of fading it in.
+    const crackTex = atlas.texture.clone();
+    crackTex.needsUpdate = true;
+    const [cu0, cv0, cu1, cv1] = atlas.uv('crack');
+    crackTex.offset.set(cu0, cv0);
+    crackTex.repeat.set(cu1 - cu0, cv1 - cv0);
+    crackTex.magFilter = THREE.NearestFilter;
+    crackTex.minFilter = THREE.NearestFilter;
     this.crack = new THREE.Mesh(
       new THREE.BoxGeometry(1.02, 1.02, 1.02),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false })
+      new THREE.MeshBasicMaterial({ map: crackTex, color: 0x000000, alphaTest: 1, side: THREE.DoubleSide })
     );
     this.crack.visible = false;
     scene.add(this.crack);
@@ -154,7 +163,7 @@ export class Interaction {
     if (hit && this.progress > 0) {
       this.crack.visible = true;
       this.crack.position.copy(this.outline.position);
-      this.crack.material.opacity = this.progress * 0.55;
+      this.crack.material.alphaTest = 1 - this.progress;
       const s = 1 - this.progress * 0.06;
       this.crack.scale.setScalar(s);
     } else {

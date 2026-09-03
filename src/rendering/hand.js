@@ -68,7 +68,7 @@ export class HandView {
     tex.minFilter = THREE.NearestFilter;
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(0.5, 0.5),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide })
     );
     m.rotation.set(0, 0, Math.PI / 4);
     m.position.set(0, 0, 0.1);

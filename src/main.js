@@ -188,7 +188,7 @@ async function startGame(save, mode = 'survival') {
   headlampOn = false;
 
   interaction = new Interaction({
-    scene, world, player, inventory, hud, itemDrops,
+    scene, world, player, inventory, hud, itemDrops, atlas,
     onOpenTable: () => { if (state === 'playing') openInventory(true); },
   });
 
