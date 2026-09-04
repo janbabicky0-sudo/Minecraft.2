@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, '..', 'public', 'textures');
 
-const TILE = 16;
+const TILE = 16;        // procedural painter resolution
+const ATLAS_TILE = 64;  // atlas cell resolution (real textures baked at this size)
 const COLS = 8;
 
 // ---- deterministic value noise -------------------------------------------------
@@ -79,41 +80,83 @@ class Tile {
 const clamp255 = (v) => Math.max(0, Math.min(255, Math.round(v)));
 const lerp = (a, b, t) => a + (b - a) * t;
 
-// ---- fixed bitmaps (extracted from a supplied 16x16 texture) ----------------
-// RGBA, 16x16, base64-encoded raw bytes (row-major, top->down).
-function tileFromB64(b64) {
+// ---- fixed bitmaps loaded from public/textures/blocks/*.png -----------------
+// (extracted from supplied .glb block models by scripts/extract-textures.mjs)
+const BLOCK_PNG_DIR = path.join(__dirname, '..', 'public', 'textures', 'blocks');
+
+function decodePNG16(file) {
+  const png = fs.readFileSync(file);
+  let off = 8, w = 0, h = 0, colorType = 6;
+  const idat = [];
+  while (off < png.length) {
+    const len = png.readUInt32BE(off);
+    const type = png.toString('ascii', off + 4, off + 8);
+    const data = png.subarray(off + 8, off + 8 + len);
+    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); colorType = data[9]; }
+    else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+    off += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const ch = colorType === 6 ? 4 : colorType === 2 ? 3 : 1;
+  const stride = w * ch;
+  const rgba = new Uint8Array(w * h * 4);
+  let prev = Buffer.alloc(stride), p = 0;
+  for (let y = 0; y < h; y++) {
+    const f = raw[p++];
+    const line = Buffer.from(raw.subarray(p, p + stride)); p += stride;
+    for (let i = 0; i < stride; i++) {
+      const a = i >= ch ? line[i - ch] : 0, b = prev[i], c = i >= ch ? prev[i - ch] : 0;
+      let v = line[i];
+      if (f === 1) v = (v + a) & 255;
+      else if (f === 2) v = (v + b) & 255;
+      else if (f === 3) v = (v + ((a + b) >> 1)) & 255;
+      else if (f === 4) {
+        const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+        v = (v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+      }
+      line[i] = v;
+    }
+    prev = line;
+    for (let x = 0; x < w; x++) {
+      const si = x * ch, di = (y * w + x) * 4;
+      rgba[di] = line[si]; rgba[di + 1] = ch > 1 ? line[si + 1] : line[si];
+      rgba[di + 2] = ch > 2 ? line[si + 2] : line[si]; rgba[di + 3] = ch === 4 ? line[si + 3] : 255;
+    }
+  }
+  // area-average downsample to ATLAS_TILE
+  const N = ATLAS_TILE;
+  const out = new Uint8Array(N * N * 4);
+  const sxScale = w / N, syScale = h / N;
+  for (let ty = 0; ty < N; ty++) for (let tx = 0; tx < N; tx++) {
+    let r = 0, g = 0, b = 0, a = 0, n = 0;
+    const x0 = (tx * sxScale) | 0, x1 = Math.max(x0 + 1, ((tx + 1) * sxScale) | 0);
+    const y0 = (ty * syScale) | 0, y1 = Math.max(y0 + 1, ((ty + 1) * syScale) | 0);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2]; a += rgba[i + 3]; n++;
+    }
+    const di = (ty * N + tx) * 4;
+    out[di] = r / n; out[di + 1] = g / n; out[di + 2] = b / n; out[di + 3] = a / n;
+  }
+  return out;
+}
+
+function pngTile(name) {
   const t = new Tile(0);
-  t.buf = new Uint8Array(Buffer.from(b64, 'base64'));
+  t.buf = decodePNG16(path.join(BLOCK_PNG_DIR, name + '.png')); // now ATLAS_TILE px
+  t.size = ATLAS_TILE;
   return t;
 }
-const GRASS_TOP_B64 =
-  'b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9fljP/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/ebhK/1+WM/9vqjz/b6o8/2+qPP9vqjz/ebhK/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP95uEr/b6o8/2+qPP9Pgir/b6o8/0+CKv9vqjz/b6o8/2+qPP9vqjz/b6o8/0+CKv9vqjz/X5Yz/2+qPP9vqjz/b6o8/0+CKv9vqjz/ebhK/2+qPP9vqjz/ebhK/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP9fljP/b6o8/2+qPP9Pgir/b6o8/2+qPP9Pgir/b6o8/0+CKv9vqjz/ebhK/2+qPP9fljP/X5Yz/3m4Sv9vqjz/b6o8/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/2+qPP9fljP/ebhK/2+qPP9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/3m4Sv9vqjz/b6o8/2+qPP9fljP/X5Yz/2+qPP9vqjz/b6o8/0+CKv9Pgir/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/0+CKv9vqjz/b6o8/2+qPP9vqjz/b6o8/1+WM/9vqjz/b6o8/0+CKv9fljP/ebhK/2+qPP95uEr/ebhK/2+qPP9vqjz/b6o8/2+qPP9vqjz/X5Yz/2+qPP9vqjz/b6o8/2+qPP9vqjz/T4Iq/1+WM/95uEr/X5Yz/1+WM/95uEr/b6o8/3m4Sv9fljP/X5Yz/2+qPP9vqjz/b6o8/1+WM/9vqjz/T4Iq/2+qPP9vqjz/b6o8/3m4Sv9Pgir/X5Yz/3m4Sv9vqjz/b6o8/3m4Sv9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9Pgir/X5Yz/1+WM/9vqjz/ebhK/2+qPP9vqjz/b6o8/1+WM/9fljP/b6o8/1+WM/9vqjz/X5Yz/1+WM/9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/b6o8/2+qPP9fljP/b6o8/2+qPP9fljP/b6o8/w==';
-const GRASS_SIDE_B64 =
-  'a0Ql/4paNP+KWjT/ilo0/3pNK/96TSv/ilo0/4paNP+KWjT/ek0r/4paNP+KWjT/ilo0/4paNP+aa0D/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/ek0r/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP+aa0D/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/mmtA/5prQP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ek0r/3pNK/+KWjT/mmtA/5prQP+KWjT/a0Ql/4paNP96TSv/ilo0/4paNP+KWjT/mmtA/3pNK/+KWjT/a0Ql/4paNP96TSv/ilo0/3pNK/9rRCX/mmtA/4paNP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP96TSv/ek0r/4paNP9rRCX/ilo0/4paNP+KWjT/mmtA/2tEJf+KWjT/ek0r/5prQP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP9rRCX/ilo0/5prQP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/a0Ql/4paNP+KWjT/a0Ql/4paNP+KWjT/mmtA/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP9rRCX/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/a0Ql/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/3pNK/96TSv/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/3pNK/96TSv/ilo0/4paNP+KWjT/ilo0/3pNK/9vqjz/b6o8/3pNK/96TSv/ebhK/3pNK/9vqjz/ebhK/3pNK/9vqjz/ilo0/3pNK/95uEr/ilo0/2+qPP9vqjz/b6o8/2+qPP95uEr/b6o8/2+qPP9vqjz/b6o8/2+qPP9vqjz/ebhK/2+qPP9fljP/b6o8/2+qPP9vqjz/ebhK/2+qPP9vqjz/b6o8/0+CKv9vqjz/T4Iq/1+WM/9vqjz/b6o8/2+qPP9Pgir/b6o8/2+qPP95uEr/X5Yz/w==';
-const DIRT_B64 =
-  'ek0r/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/2tEJf+aa0D/ilo0/4paNP+KWjT/ek0r/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/5prQP+KWjT/ek0r/3pNK/+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+aa0D/ek0r/4paNP9rRCX/ilo0/5prQP+KWjT/mmtA/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP9rRCX/ilo0/3pNK/9rRCX/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/mmtA/4paNP9rRCX/ilo0/4paNP9rRCX/ilo0/4paNP96TSv/ilo0/5prQP96TSv/ilo0/3pNK/+KWjT/ilo0/3pNK/96TSv/ek0r/4paNP+KWjT/ek0r/3pNK/9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/a0Ql/4paNP9rRCX/ek0r/3pNK/+KWjT/ek0r/3pNK/9rRCX/ilo0/2tEJf9rRCX/ilo0/2tEJf+KWjT/ilo0/3pNK/+KWjT/ek0r/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/a0Ql/4paNP+aa0D/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP+KWjT/ilo0/3pNK/+KWjT/ilo0/2tEJf+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP9rRCX/ilo0/4paNP+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/2tEJf+aa0D/ilo0/3pNK/+KWjT/ilo0/2tEJf+KWjT/ilo0/3pNK/+KWjT/ilo0/4paNP96TSv/ilo0/4paNP+KWjT/ilo0/3pNK/+KWjT/a0Ql/4paNP+KWjT/mmtA/4paNP9rRCX/ilo0/2tEJf+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ek0r/4paNP9rRCX/ek0r/3pNK/96TSv/ek0r/3pNK/96TSv/ilo0/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/5prQP+KWjT/ilo0/4paNP+aa0D/ek0r/4paNP+KWjT/ilo0/4paNP+KWjT/ilo0/4paNP+aa0D/ilo0/w==';
 
 // ---- painters ---------------------------------------------------------------
 // Each returns a Tile. Order here === atlas index order.
 const PAINTERS = {
-  // grass_top / grass_side / dirt use a supplied 16x16 texture (grass_block.glb) verbatim.
-  grass_top: () => tileFromB64(GRASS_TOP_B64),
-  grass_side: () => tileFromB64(GRASS_SIDE_B64),
-  dirt: () => tileFromB64(DIRT_B64),
-  stone: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([128, 128, 130, 255], 16, { specks: 0.04, speck: [96, 96, 100], octaves: 3 });
-    // a couple of cracks
-    for (let k = 0; k < 3; k++) {
-      let x = Math.floor(t.rnd(k, 20) * 16), y = Math.floor(t.rnd(k, 21) * 16);
-      for (let i = 0; i < 6; i++) {
-        t.set(x, y, 92, 92, 96);
-        x += t.rnd(x, y) < 0.5 ? 1 : 0;
-        y += t.rnd(y, x) < 0.5 ? 1 : -1;
-      }
-    }
-    return t;
-  },
+  // grass / dirt / stone / log use supplied block textures verbatim
+  grass_top: () => pngTile('grass_top'),
+  grass_side: () => pngTile('grass_side'),
+  dirt: () => pngTile('dirt'),
+  stone: () => pngTile('stone'),
   cobblestone: (s) => {
     const t = new Tile(s);
     t.fillNoise([88, 88, 92, 255], 8);
@@ -129,63 +172,17 @@ const PAINTERS = {
     }
     return t;
   },
-  sand: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([221, 205, 158, 255], 11, { specks: 0.05, speck: [206, 188, 140] });
-    return t;
-  },
+  sand: () => pngTile('sand'),
   sandstone: (s) => {
     const t = new Tile(s);
     t.fillNoise([223, 205, 156, 255], 8);
     for (let y = 3; y < 16; y += 5) for (let x = 0; x < 16; x++) t.set(x, y, 198, 178, 132);
     return t;
   },
-  log_side: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([104, 82, 50, 255], 12, { octaves: 3 });
-    for (let x = 0; x < 16; x++) {
-      if (t.rnd(x, 30) < 0.35) for (let y = 0; y < 16; y++) t.set(x, y, 86, 66, 40);
-    }
-    // knots
-    t.blobs(2, [72, 54, 34], [1.2, 2.0], s + 3);
-    for (let y = 0; y < 16; y++) { t.set(0, y, 74, 56, 34); t.set(15, y, 74, 56, 34); }
-    return t;
-  },
-  log_top: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([150, 118, 78, 255], 8);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
-      const ring = Math.floor(d) % 2 === 0;
-      const j = (fbm(t.rnd, x / 3, y / 3, 2) - 0.5) * 16;
-      const c = ring ? 150 : 120;
-      t.set(x, y, clamp255(c + j), clamp255(c * 0.8 + j), clamp255(c * 0.55 + j));
-    }
-    t.set(7, 7, 90, 66, 40); t.set(8, 7, 90, 66, 40); t.set(7, 8, 90, 66, 40); t.set(8, 8, 90, 66, 40);
-    return t;
-  },
-  planks: (s) => {
-    const t = new Tile(s);
-    t.fillNoise([164, 130, 80, 255], 12, { octaves: 3 });
-    for (let y = 0; y < 16; y++) {
-      if (y % 4 === 0) for (let x = 0; x < 16; x++) t.set(x, y, 120, 92, 54);
-    }
-    // staggered vertical seams
-    for (let band = 0; band < 4; band++) {
-      const sx = (band % 2 === 0) ? 8 : 0;
-      for (let y = band * 4 + 1; y < band * 4 + 4; y++) t.set(sx, y, 120, 92, 54);
-    }
-    return t;
-  },
-  leaves: (s) => {
-    const t = new Tile(s);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      if (t.rnd(x + 3, y + 1) < 0.14) { t.set(x, y, 0, 0, 0, 0); continue; }
-      const n = (fbm(t.rnd, x / 3, y / 3, 3) - 0.5) * 60;
-      t.set(x, y, clamp255(58 + n), clamp255(112 + n), clamp255(44 + n), 255);
-    }
-    return t;
-  },
+  log_side: () => pngTile('log_side'),
+  log_top: () => pngTile('log_top'),
+  planks: () => pngTile('planks'),
+  leaves: () => pngTile('leaves'),
   glass: (s) => {
     const t = new Tile(s);
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
@@ -196,18 +193,7 @@ const PAINTERS = {
     for (let i = 0; i < 10; i++) t.set(3 + i, 12 - i, 245, 252, 255, 150); // shine
     return t;
   },
-  water: (s) => {
-    const t = new Tile(s);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const n = (fbm(t.rnd, x / 6, y / 6, 2) - 0.5) * 16;
-      // deep, saturated blue
-      let r = 31 + n, g = 84 + n, b = 178 + n * 1.4;
-      // faint horizontal ripple bands
-      if ((y + Math.floor(fbm(t.rnd, x / 5, 0, 2) * 3)) % 5 === 0) { r += 10; g += 16; b += 14; }
-      t.set(x, y, clamp255(r), clamp255(g), clamp255(b), 255);
-    }
-    return t;
-  },
+  water: () => pngTile('water'),
   snow: (s) => {
     const t = new Tile(s);
     t.fillNoise([243, 247, 252, 255], 6, { specks: 0.03, speck: [225, 232, 242] });
@@ -343,7 +329,7 @@ function iconTool(seed, kind, head, headDark) {
 // ---- assemble atlas ---------------------------------------------------------
 const names = Object.keys(PAINTERS);
 const rows = Math.ceil(names.length / COLS);
-const W = COLS * TILE, H = rows * TILE;
+const W = COLS * ATLAS_TILE, H = rows * ATLAS_TILE;
 const rgba = new Uint8Array(W * H * 4);
 const map = {};
 
@@ -351,10 +337,13 @@ names.forEach((name, idx) => {
   const col = idx % COLS, row = Math.floor(idx / COLS);
   map[name] = idx;
   const tile = PAINTERS[name](idx * 1000 + 17);
-  for (let y = 0; y < TILE; y++) {
-    for (let x = 0; x < TILE; x++) {
-      const si = (y * TILE + x) * 4;
-      const dx = col * TILE + x, dy = row * TILE + y;
+  const src = tile.size || TILE;                 // 16 for procedural, ATLAS_TILE for pngTile
+  const scale = ATLAS_TILE / src;                // nearest-upscale procedural tiles
+  for (let y = 0; y < ATLAS_TILE; y++) {
+    for (let x = 0; x < ATLAS_TILE; x++) {
+      const sx = (x / scale) | 0, sy = (y / scale) | 0;
+      const si = (sy * src + sx) * 4;
+      const dx = col * ATLAS_TILE + x, dy = row * ATLAS_TILE + y;
       const di = (dy * W + dx) * 4;
       rgba[di] = tile.buf[si];
       rgba[di + 1] = tile.buf[si + 1];
@@ -399,6 +388,6 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(path.join(OUT_DIR, 'atlas.png'), encodePNG(W, H, rgba));
 fs.writeFileSync(
   path.join(OUT_DIR, 'atlas.json'),
-  JSON.stringify({ tile: TILE, cols: COLS, rows, width: W, height: H, map }, null, 2)
+  JSON.stringify({ tile: ATLAS_TILE, cols: COLS, rows, width: W, height: H, map }, null, 2)
 );
 console.log(`atlas: ${names.length} tiles -> ${W}x${H}  (${OUT_DIR})`);

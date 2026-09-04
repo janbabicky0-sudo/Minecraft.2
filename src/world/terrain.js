@@ -277,8 +277,15 @@ export function generateChunkBlocks(cx, cz, blocks) {
   }
 }
 
+// Subtle biome hue nudge. The block textures are real photos now, so the tint
+// is lerped most of the way to white — it just shifts plains/forest/etc. slightly.
 export function biomeTint(kind, wx, wz) {
   const info = BIOME_INFO[biomeAt(wx, wz)];
   const c = kind === 'foliage' ? info.foliage : info.grass;
-  return [c[0] / 255, c[1] / 255, c[2] / 255];
+  const k = 0.7; // 0 = full tint, 1 = no tint
+  return [
+    (c[0] / 255) * (1 - k) + k,
+    (c[1] / 255) * (1 - k) + k,
+    (c[2] / 255) * (1 - k) + k,
+  ];
 }

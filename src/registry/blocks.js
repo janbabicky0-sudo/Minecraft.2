@@ -53,7 +53,7 @@ export const BLOCKS = {
   }),
   [B.PLANKS]: def({ name: 'Prkna', hardness: 3, tool: 'axe', faces: { all: 'planks' } }),
   [B.LEAVES]: def({
-    name: 'Listí', hardness: 0.25, tool: null, opaque: false, transparent: true, cutout: true,
+    name: 'Listí', hardness: 0.25, tool: null,
     drop: [], // sticks / apples handled specially in interaction
     faces: { all: 'leaves' }, tint: 'foliage',
   }),
