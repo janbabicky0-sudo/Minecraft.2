@@ -28,13 +28,16 @@ for (const key in BLOCKS) {
 }
 
 // ---- face defs -------------------------------------------------------
+// corners listed bottom-left, bottom-right, top-right, top-left as seen from
+// OUTSIDE the block (looking along -normal). This order is CCW so the default
+// FrontSide culling keeps the outward face, and it matches the UV square.
 const FACES = [
-  { n: [1, 0, 0], shade: 0.72, corners: [[1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 0]], u: [0, 0, 1], v: [0, 1, 0] },
-  { n: [-1, 0, 0], shade: 0.72, corners: [[0, 0, 1], [0, 0, 0], [0, 1, 0], [0, 1, 1]], u: [0, 0, 1], v: [0, 1, 0] },
+  { n: [1, 0, 0], shade: 0.72, corners: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], u: [0, 0, 1], v: [0, 1, 0] },
+  { n: [-1, 0, 0], shade: 0.72, corners: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], u: [0, 0, 1], v: [0, 1, 0] },
   { n: [0, 1, 0], shade: 1.0, corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], u: [1, 0, 0], v: [0, 0, 1] },
   { n: [0, -1, 0], shade: 0.5, corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], u: [1, 0, 0], v: [0, 0, 1] },
-  { n: [0, 0, 1], shade: 0.86, corners: [[1, 0, 1], [0, 0, 1], [0, 1, 1], [1, 1, 1]], u: [1, 0, 0], v: [0, 1, 0] },
-  { n: [0, 0, -1], shade: 0.86, corners: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], u: [1, 0, 0], v: [0, 1, 0] },
+  { n: [0, 0, 1], shade: 0.86, corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], u: [1, 0, 0], v: [0, 1, 0] },
+  { n: [0, 0, -1], shade: 0.86, corners: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], u: [1, 0, 0], v: [0, 1, 0] },
 ];
 const AO_LEVEL = [0.42, 0.62, 0.8, 1.0];
 const FACE_TILE_NAMES = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
