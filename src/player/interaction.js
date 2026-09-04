@@ -73,7 +73,7 @@ export function canHarvest(blockId, heldId) {
 }
 
 export class Interaction {
-  constructor({ scene, world, player, inventory, hud, onOpenTable, itemDrops, atlas }) {
+  constructor({ scene, world, player, inventory, hud, onOpenTable, itemDrops, atlas, mobs }) {
     this.scene = scene;
     this.world = world;
     this.player = player;
@@ -81,6 +81,8 @@ export class Interaction {
     this.hud = hud;
     this.onOpenTable = onOpenTable;
     this.itemDrops = itemDrops;
+    this.mobs = mobs || null;
+    this._attackCd = 0;
 
     this.target = null;
     this.mining = false;
@@ -116,6 +118,26 @@ export class Interaction {
   }
 
   startMine() {
+    // left click also punches a mob if one is in the way and closer than a block
+    if (this._attackCd <= 0 && this.mobs) {
+      const origin = this.player.eyePosition;
+      const dir = this._dir();
+      const hitMob = this.mobs.raycast(origin, dir, 3.6);
+      if (hitMob) {
+        const blockHit = raycastVoxel(this.world, origin, dir, 3.6);
+        const blockDist = blockHit
+          ? Math.hypot(blockHit.block.x + 0.5 - origin.x, blockHit.block.y + 0.5 - origin.y, blockHit.block.z + 0.5 - origin.z)
+          : Infinity;
+        if (hitMob.dist <= blockDist) {
+          const tool = toolOf(this.inventory.activeItem()?.id);
+          const dmg = tool ? (tool.type === 'axe' ? 4 : 2) : 1;
+          hitMob.mob.hurt(dmg, { x: dir.x, z: dir.z });
+          this._attackCd = 0.35;
+          this.hud?.flashHand?.();
+          return;
+        }
+      }
+    }
     this.mining = true;
   }
   stopMine() {
@@ -144,6 +166,7 @@ export class Interaction {
     }
 
     this._placeCooldown = Math.max(0, this._placeCooldown - dt);
+    this._attackCd = Math.max(0, this._attackCd - dt);
 
     if (this.mining && hit) {
       const held = this.inventory.activeItem();

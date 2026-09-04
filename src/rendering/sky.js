@@ -85,6 +85,39 @@ export class Sky {
     this.moon.frustumCulled = false;
     scene.add(this.sun, this.moon);
 
+    // blocky drifting clouds — a big plane far overhead
+    const CN = 64;
+    const cd = new Uint8Array(CN * CN * 4);
+    for (let i = 0; i < CN * CN; i++) {
+      const x = i % CN, y = (i / CN) | 0;
+      // coarse value-noise blobs
+      let v = 0;
+      for (let o = 1; o <= 3; o++) {
+        const s = 4 * o;
+        const h = Math.sin((((x / s) | 0) * 12.9898 + ((y / s) | 0) * 78.233) * 43758.5) * 0.5 + 0.5;
+        v += (h % 1) / o;
+      }
+      const on = v > 0.62 ? 1 : 0;
+      cd[i * 4] = cd[i * 4 + 1] = cd[i * 4 + 2] = 255;
+      cd[i * 4 + 3] = on ? 220 : 0;
+    }
+    const cloudTex = new THREE.DataTexture(cd, CN, CN, THREE.RGBAFormat);
+    cloudTex.wrapS = cloudTex.wrapT = THREE.RepeatWrapping;
+    cloudTex.magFilter = THREE.NearestFilter;
+    cloudTex.repeat.set(6, 6);
+    cloudTex.needsUpdate = true;
+    this.clouds = new THREE.Mesh(
+      new THREE.PlaneGeometry(1400, 1400),
+      new THREE.MeshBasicMaterial({
+        map: cloudTex, transparent: true, opacity: 0.55, depthWrite: false, fog: false, side: THREE.DoubleSide,
+      })
+    );
+    this.clouds.rotation.x = -Math.PI / 2;
+    this.clouds.frustumCulled = false;
+    this.clouds.renderOrder = -1;
+    scene.add(this.clouds);
+    this._cloudTex = cloudTex;
+
     // lights
     this.sunLight = new THREE.DirectionalLight(0xffffff, 1.4);
     this.sunLight.position.set(50, 120, 20);
@@ -186,6 +219,13 @@ export class Sky {
     this.stars.position.copy(camera.position);
     this.stars.rotation.z = frac * Math.PI * 2;
     this.dome.position.copy(camera.position);
+
+    // drifting clouds, tinted by daylight, hidden underground
+    this.clouds.position.set(camera.position.x, camera.position.y + 90, camera.position.z);
+    this._cloudTex.offset.x = (this.time * 0.004) % 1;
+    this._cloudTex.offset.y = (this.time * 0.0016) % 1;
+    this.clouds.material.opacity = (0.15 + d * 0.5) * (1 - this._underground);
+    this.clouds.material.color.copy(horizon).lerp(new THREE.Color(0xffffff), 0.55 + d * 0.35);
 
     // label
     if (elev > 0.25) this._phaseLabel = 'den';

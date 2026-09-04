@@ -7,6 +7,7 @@ import { initTerrain, biomeAt, BIOME_INFO, heightAt } from './world/terrain.js';
 import { loadAtlas } from './rendering/atlas.js';
 import { World } from './world/world.js';
 import { ItemDrops } from './world/drops.js';
+import { MobManager } from './entities/mobManager.js';
 import { Sky } from './rendering/sky.js';
 import { HandView } from './rendering/hand.js';
 import { Player } from './player/player.js';
@@ -48,7 +49,7 @@ function fovForAspect(aspect) {
   return THREE.MathUtils.clamp((v * 180) / Math.PI, 45, 80);
 }
 
-let world, sky, player, controls, interaction, inventory, hud, pause, hand, itemDrops;
+let world, sky, player, controls, interaction, inventory, hud, pause, hand, itemDrops, mobs;
 let headlamp;
 let headlampOn = false;
 let atlas;
@@ -177,6 +178,7 @@ async function startGame(save, mode = 'survival') {
     onEdit: () => autosaver?.markDirty(),
   });
   itemDrops = new ItemDrops(scene, atlas);
+  mobs = new MobManager(scene, world);
 
   player = new Player(camera, world);
   player.setMode(save?.mode || mode);
@@ -188,7 +190,7 @@ async function startGame(save, mode = 'survival') {
   headlampOn = false;
 
   interaction = new Interaction({
-    scene, world, player, inventory, hud, itemDrops, atlas,
+    scene, world, player, inventory, hud, itemDrops, atlas, mobs,
     onOpenTable: () => { if (state === 'playing') openInventory(true); },
   });
 
@@ -276,6 +278,7 @@ async function startGame(save, mode = 'survival') {
   }
 
   hand.setHeld(inventory.activeItem());
+  mobs.seed(player.pos);
 
   overlays.loading.classList.add('hidden');
   hud.setVisible(true);
@@ -285,7 +288,7 @@ async function startGame(save, mode = 'survival') {
   clock.getDelta();
 
   if (import.meta.env.DEV) {
-    window.__game = { scene, camera, renderer, inventory, get world() { return world; }, get player() { return player; }, get sky() { return sky; } };
+    window.__game = { scene, camera, renderer, inventory, mobs, get world() { return world; }, get player() { return player; }, get sky() { return sky; } };
   }
 }
 
@@ -463,6 +466,7 @@ function step() {
       world.update(player.pos, 6);
       interaction.update(dt);
       itemDrops.update(dt, world, player, (id) => inventory.add(id, 1));
+      mobs.update(dt, player.pos);
 
       const moving = Math.hypot(player.vel.x, player.vel.z) > 0.4;
       hand.update(dt, moving, Math.hypot(player.vel.x, player.vel.z));
