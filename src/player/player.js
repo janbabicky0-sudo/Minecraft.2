@@ -5,10 +5,12 @@ import { getBlock } from '../registry/blocks.js';
 const WIDTH = 0.6;
 const HEIGHT = 1.8;
 const EYE = 1.62;
+const EYE_CROUCH = 1.27;
 const GRAVITY = 28;
 const JUMP_SPEED = 8.6;
 const WALK = 4.7;
-const SPRINT = 6.9;
+const SPRINT = 7.1;
+const SNEAK = 1.45;
 const FLY = 11;
 const FLY_SPRINT = 22;
 const MAX_FALL = 60;
@@ -37,8 +39,10 @@ export class Player {
     this.dead = false;
 
     this.input = {
-      forward: 0, right: 0, jump: false, sprint: false, up: 0, down: 0,
+      forward: 0, right: 0, jump: false, sprint: false, up: 0, down: 0, sneak: false,
     };
+    this._eye = EYE;
+    this.sneaking = false;
   }
 
   spawnAt(x, z) {
@@ -55,7 +59,7 @@ export class Player {
   }
 
   get eyePosition() {
-    return new THREE.Vector3(this.pos.x, this.pos.y + EYE, this.pos.z);
+    return new THREE.Vector3(this.pos.x, this.pos.y + this._eye, this.pos.z);
   }
 
   headInWater() {
@@ -98,9 +102,16 @@ export class Player {
     const fx = -sin, fz = -cos;
     const rx = cos, rz = -sin;
 
-    let speed = this.flying
-      ? (this.input.sprint ? FLY_SPRINT : FLY)
-      : (this.input.sprint && this.input.forward > 0 ? SPRINT : WALK);
+    // crouch: only on solid ground, not while flying / swimming
+    this.sneaking = this.input.sneak && this.onGround && !this.flying && !inWater;
+    const targetEye = this.sneaking ? EYE_CROUCH : EYE;
+    this._eye += (targetEye - this._eye) * Math.min(1, dt * 14);
+
+    let speed;
+    if (this.flying) speed = this.input.sprint ? FLY_SPRINT : FLY;
+    else if (this.sneaking) speed = SNEAK;
+    else if (this.input.sprint && this.input.forward > 0) speed = SPRINT;
+    else speed = WALK;
     if (inWater && !this.flying) speed *= 0.5;
 
     let wishX = fx * this.input.forward + rx * this.input.right;
@@ -131,6 +142,7 @@ export class Player {
         if (this.input.jump && this.onGround) {
           this.vel.y = JUMP_SPEED;
           this.onGround = false;
+          this._justJumped = true;
         }
       }
     }
@@ -176,9 +188,16 @@ export class Player {
   _survival(dt, inWater) {
     if (this.mode === 'creative' || this.flying) return;
 
-    // hunger drain
-    const moving = Math.hypot(this.vel.x, this.vel.z) > 0.5;
-    this._foodTimer += dt * (moving ? (this.input.sprint ? 2.4 : 1.2) : 0.4);
+    // hunger drain — sprinting burns through it much faster
+    const spd = Math.hypot(this.vel.x, this.vel.z);
+    const sprinting = this.input.sprint && this.input.forward > 0 && spd > 2 && !this.sneaking;
+    let rate;
+    if (sprinting) rate = 4.4;
+    else if (spd > 0.5) rate = this.sneaking ? 0.8 : 1.3;
+    else rate = 0.35;
+    if (this._justJumped && sprinting) this._foodTimer += 0.6; // sprint-jump costs extra
+    this._justJumped = false;
+    this._foodTimer += dt * rate;
     if (this._foodTimer > 8) {
       this._foodTimer = 0;
       this.hunger = Math.max(0, this.hunger - 1);
@@ -209,12 +228,25 @@ export class Player {
     const dx = this.vel.x * dt, dy = this.vel.y * dt, dz = this.vel.z * dt;
     const maxStep = 0.2;
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)) / maxStep));
+    const edgeGuard = this.sneaking && this.onGround;
     this.onGround = false;
     for (let i = 0; i < steps; i++) {
+      const bx = this.pos.x, bz = this.pos.z;
       this._moveAxis('x', dx / steps);
+      if (edgeGuard && !this._groundUnder()) { this.pos.x = bx; this.vel.x = 0; }
       this._moveAxis('z', dz / steps);
+      if (edgeGuard && !this._groundUnder()) { this.pos.z = bz; this.vel.z = 0; }
       this._moveAxis('y', dy / steps);
     }
+  }
+
+  // is there a solid block just below any part of the player's footprint?
+  _groundUnder() {
+    const p = this.pos, hw = WIDTH / 2, y = Math.floor(p.y - 0.05);
+    for (let z = Math.floor(p.z - hw + 1e-3); z <= Math.floor(p.z + hw - 1e-3); z++)
+      for (let x = Math.floor(p.x - hw + 1e-3); x <= Math.floor(p.x + hw - 1e-3); x++)
+        if (this._solid(x, y, z)) return true;
+    return false;
   }
 
   // move one axis by `amount`, then clamp out of any solid it now overlaps

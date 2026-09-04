@@ -25,6 +25,8 @@ export class Controls {
 
     this._keys = new Set();
     this._lastSpace = 0;
+    this._lastW = 0;
+    this._sprintLatch = false;
     this._bind();
   }
 
@@ -94,28 +96,42 @@ export class Controls {
         if (now - this._lastSpace < 280) this.player.toggleFly();
         this._lastSpace = now;
       }
+      if (code === 'KeyW') {
+        const now = performance.now();
+        if (now - this._lastW < 300) this._sprintLatch = true;
+        this._lastW = now;
+      }
     }
 
     if (down) this._keys.add(code);
-    else this._keys.delete(code);
+    else {
+      this._keys.delete(code);
+      if (code === 'KeyW') this._sprintLatch = false; // let go of W -> stop sprinting
+    }
     this._apply();
   }
 
   _resetInput() {
     const i = this.player.input;
     i.forward = i.right = i.up = i.down = 0;
-    i.jump = i.sprint = false;
+    i.jump = i.sprint = i.sneak = false;
+    this._sprintLatch = false;
   }
 
   _apply() {
     const k = this._keys;
     const i = this.player.input;
-    i.forward = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    const w = k.has('KeyW');
+    i.forward = (w ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
     i.right = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     i.jump = k.has('Space');
     i.up = k.has('Space') ? 1 : 0;
-    i.down = (k.has('ShiftLeft') || k.has('ShiftRight')) ? 1 : 0;
-    i.sprint = k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyR');
+    const shift = k.has('ShiftLeft') || k.has('ShiftRight');
+    i.down = shift ? 1 : 0;    // fly descent
+    i.sneak = shift;           // ground crouch
+    if (!w) this._sprintLatch = false;
+    i.sprint = (this._sprintLatch && w)
+      || k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyR');
   }
 
   // call each frame so held-key state stays fresh even without events
