@@ -190,6 +190,15 @@ body.underwater #app::after {
   backdrop-filter: blur(1px);
 }
 #pause .scrim { background: rgba(6, 9, 18, 0.62); backdrop-filter: blur(3px); }
+#death .scrim {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(120, 10, 10, 0.28), rgba(50, 4, 4, 0.72) 95%),
+    rgba(20, 2, 2, 0.5);
+  backdrop-filter: blur(2px) saturate(0.6);
+}
+.death-title { color: #ff6b6b; text-shadow: 3px 3px 0 rgba(0,0,0,0.6); }
+#death .menu-body { animation: death-in 0.5s ease-out; }
+@keyframes death-in { from { opacity: 0; transform: translateY(-14px) scale(0.96); } }
 
 .menu-body {
   position: relative;

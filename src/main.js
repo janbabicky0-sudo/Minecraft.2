@@ -26,7 +26,9 @@ const overlays = {
   loading: document.getElementById('loading'),
   loadFill: document.getElementById('load-fill'),
   startNote: document.getElementById('start-note'),
+  death: document.getElementById('death'),
 };
+let worldSpawn = { x: 0, z: 0 };
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -267,6 +269,7 @@ async function startGame(save, mode = 'survival') {
     }, 8);
   });
 
+  worldSpawn = { x: sx, z: sz };
   if (!save?.player) {
     player.spawnAt(sx, sz);
   } else {
@@ -485,7 +488,7 @@ function step() {
     const submerged = player && player.headInWater();
     document.body.classList.toggle('underwater', !!submerged);
 
-    autosaver?.tick(performance.now());
+    if (state === 'playing') autosaver?.tick(performance.now());
   }
 
   // HUD
@@ -513,21 +516,47 @@ function step() {
   }
 }
 
+let _deathShown = false;
 function handleDeath() {
+  if (_deathShown) return;
+  _deathShown = true;
   running = false;
-  state = 'paused';
+  state = 'dead';
   controls.exitLock();
   hud.setVisible(false);
-  if (confirm('Zemřel jsi. Objevit se znovu?')) {
-    const sx = Math.floor(player.pos.x), sz = Math.floor(player.pos.z);
-    player.spawnAt(sx, sz);
-    state = 'playing';
-    hud.setVisible(true);
-    controls.requestLock();
-    clock.getDelta();
-  } else {
-    pause.show();
-  }
+  const cause = document.getElementById('death-cause');
+  if (cause) cause.textContent = player.hunger <= 0 ? 'Vyhladověl jsi.'
+    : player.pos.y < 0 ? 'Spadl jsi do prázdna.'
+    : 'Přišel jsi o veškeré zdraví.';
+  overlays.death.classList.remove('hidden');
 }
+
+function respawnAtWorldSpawn() {
+  overlays.death.classList.add('hidden');
+  _deathShown = false;
+  player.spawnAt(worldSpawn.x, worldSpawn.z);
+  player.vel.set(0, 0, 0);
+  mobs.clear();
+  mobs.seed(player.pos);
+  autosaver?.markDirty();
+  state = 'playing';
+  running = true;
+  hud.setVisible(true);
+  controls.requestLock();
+  clock.getDelta();
+}
+
+function backToMainMenu() {
+  // respawn the player at world spawn so the saved world is resumable, then
+  // reload into the title screen
+  _resetting = true; // skip the beforeunload autosave
+  player.spawnAt(worldSpawn.x, worldSpawn.z);
+  player.vel.set(0, 0, 0);
+  writeSave(collectSave());
+  location.reload();
+}
+
+document.getElementById('btn-respawn').onclick = () => respawnAtWorldSpawn();
+document.getElementById('btn-tomenu').onclick = () => backToMainMenu();
 
 boot();
